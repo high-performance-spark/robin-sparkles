@@ -1,2 +1,7 @@
 *.class
 *.log
+sbt/*.jar
+project/target/*
+project/*/target/
+*~
+target
