@@ -1,4 +1,4 @@
-package com.highperformancespark.robinsparkles
+package com.highperformancespark.robinSparkles
 
 import org.apache.spark.SparkConf
 import org.slf4j.{Logger, LoggerFactory}
@@ -21,16 +21,16 @@ case class WebUIInput(
   /**
    * Sum of the input bytes read on each executor
    */
-  val totalInputSize : Int =
-    executorSummaries.foldRight(0.0)((e1, acc)=> (e1.inputBytes/(1024*1024))+ acc).toInt
+  val totalInputSize : Double =
+    executorSummaries.foldRight(0.0)((e1, acc)=> (e1.inputBytes/(1024.0*1024.0))+ acc)
 
-  val totalComputeTime: Int = taskMetrics.foldRight(0)((t, b) => b + t.totalTime)
+  val totalTaskTime: Int = taskMetrics.foldRight(0)((t, b) => b + t.totalTime)
 
   val totalTasksRun: Int = taskMetrics.length
 
 }
 
-class ComputePartitions(sparkConf: SparkConf) {
+case class ComputePartitions()(implicit val sparkConf: SparkConf) {
    implicit val logger: Logger = LoggerFactory.getLogger(classOf[ComputePartitions])
    final val TASK_OVERHEAD_MILLI = 10
 
@@ -81,7 +81,7 @@ class ComputePartitions(sparkConf: SparkConf) {
 
   def executorIdleTime(webUIInput: WebUIInput): Int = {
     val executorStageTime = webUIInput.stageTime * webUIInput.numExectutors
-    executorStageTime - webUIInput.totalComputeTime
+    executorStageTime - webUIInput.totalTaskTime
   }
 
   /**
