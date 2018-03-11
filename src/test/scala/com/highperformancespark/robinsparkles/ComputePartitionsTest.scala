@@ -1,4 +1,4 @@
-package com.highperformancespark.robinsparkles
+package com.highperformancespark.robinSparkles
 
 
 import org.apache.spark.SparkConf
