@@ -1,4 +1,4 @@
-package com.highperformancespark.robinSparkles
+package com.highperformancespark.robinsparkles
 
 /**
  * Everyone's favourite wordcount example.
