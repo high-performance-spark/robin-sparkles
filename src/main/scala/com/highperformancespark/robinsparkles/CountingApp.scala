@@ -1,5 +1,6 @@
 package com.highperformancespark.robinsparkles
 
+import org.apache.hadoop.metrics2.MetricsCollector
 import org.apache.spark.{SparkConf, SparkContext}
 
 /**
@@ -8,11 +9,12 @@ import org.apache.spark.{SparkConf, SparkContext}
   *  (+ select CountingLocalApp when prompted)
   */
 object CountingLocalApp extends App{
-  val (inputFile, outputFile) = (args(0), args(1))
+  val (inputFile, outputFile) = (args(0), args(1), args(2))
   val conf = new SparkConf()
     .setMaster("local")
     .setAppName("my awesome app")
-
+  val metricsDir = 
+  val confWithMetrics = MetricsCollector()
   Runner.run(conf, inputFile, outputFile)
 }
 

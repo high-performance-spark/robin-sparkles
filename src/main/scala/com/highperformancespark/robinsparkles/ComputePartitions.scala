@@ -1,11 +1,11 @@
-package com.highperformancespark.robinSparkles
+package com.highperformancespark.robinsparkles
 
+import ch.cern.sparkmeasure.{StageVals, TaskVals}
 import org.apache.spark.SparkConf
 import org.slf4j.{Logger, LoggerFactory}
 
 //These are placeholders for some kind of executor information or tasks class since those sparks objects are private
 case class Task(totalTime: Int) //TODO Replace this with the actual stuff or spark object
-case class ExecutorSummary(inputBytes : Long)
 
 /**
  * I have tried to put the logic for computing things from the UI metrics directly in this case clss so that we can be
@@ -13,21 +13,28 @@ case class ExecutorSummary(inputBytes : Long)
  */
 case class WebUIInput(
   stageTime: Int,
-  private val taskMetrics: List[Task],
-  private val executorSummaries: List[ExecutorSummary]){
+  totalInputSize : Double,
+  numExectutors : Int,
+  private val taskMetrics: List[Task]){
 
   val numPartitionsUsed: Int = taskMetrics.size //TODO: Subtract retries
-  val numExectutors: Int = executorSummaries.size
-  /**
-   * Sum of the input bytes read on each executor
-   */
-  val totalInputSize : Double =
-    executorSummaries.foldRight(0.0)((e1, acc)=> (e1.inputBytes/(1024.0*1024.0))+ acc)
 
   val totalTaskTime: Int = taskMetrics.foldRight(0)((t, b) => b + t.totalTime)
 
   val totalTasksRun: Int = taskMetrics.length
 
+}
+object WebUIInput{
+  def apply(s : StageVals, tList : Seq[TaskVals]) : WebUIInput = {
+
+    val numExecutors = tList.map(_.executorId).distinct.size
+    val inputSizeMb = s.bytesRead/(1024.0*1024.0)
+    WebUIInput(
+      s.stageDuration.toInt,
+      inputSizeMb,
+      numExecutors,
+      tList.map(t => Task(t.duration.toInt)).toList)
+  }
 }
 
 case class ComputePartitions()(implicit val sparkConf: SparkConf) {
@@ -61,8 +68,6 @@ case class ComputePartitions()(implicit val sparkConf: SparkConf) {
   def possibleConcurrentTasks(): Int = {
     sparkConf.getInt("spark.executor.cores", 1) * sparkConf.getInt("spark.num.executors", 1)
   }
-
-
 
   /**
    * The compute space on one executor devided by the number of cores
