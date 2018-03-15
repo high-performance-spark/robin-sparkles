@@ -23,22 +23,23 @@ class MetricsCollector(metricsDir: String) {
     s"$metricsDir/$TASK_METRICS_DIR/app_$n"
   }
 
-//  def getN= {
+//  def numPreviousRuns = {
 //    val fullPath = Paths.get(s"$metricsDir/$STAGE_METRICS_DIR")
-//    val x = fullPath.getFileSystem.
+//    val files = java
 //    val ois = new ObjectInputStreamWithCustomClassLoader(new FileInputStream(fullPath))
 //    val result = ois.readObject().asInstanceOf[ListBuffer[T]]
 //    result
 //  }
 
-  def startSparkJobWithRecording(sparkConf : SparkConf, runNumber : Int)= {
+  def startSparkJobWithRecording(sparkConf : SparkConf, runNumber : Int): SparkConf = {
     sparkConf.set(
       "spark.extraListeners", "ch.cern.sparkmeasure.FlightRecorderStageMetrics")
     sparkConf.set("spark.extraListeners",
       "ch.cern.sparkmeasure.FlightRecorderStageMetrics")
 
     sparkConf.set("spark.executorEnv.stageMetricsFileName" ,
-      stageMetricsPath(runNumber))
+      metricsDir)
+    sparkConf
   }
 
   def readStageInfo(n : Int) = {
@@ -49,15 +50,20 @@ class MetricsCollector(metricsDir: String) {
     ch.cern.sparkmeasure.Utils.readSerializedTaskMetrics(taskMetricsPath(n))
   }
 
-  def getRunInfo(n : Int) : Seq[WebUIInput] = {
-    val stageInfo = readStageInfo(n)
-    val taskInfo = readTaskInfo(n)
-    val stageMap = stageInfo.map(s => (s.stageId, s)).toMap
-    val taskMap = taskInfo.map(s => (s.stageId, s)).groupBy(_._1)
-     stageMap.map { case (k, v) =>
-      WebUIInput(v, taskMap(k).unzip._2)
-    }.toSeq
+  def getRunInfo(n : Int) : List[WebUIInput] = {
+    try{
+      val stageInfo = readStageInfo(n)
+      val taskInfo = readTaskInfo(n)
+      val stageMap = stageInfo.map(s => (s.stageId, s)).toMap
+      val taskMap = taskInfo.map(s => (s.stageId, s)).groupBy(_._1)
+      stageMap.map { case (k, v) =>
+        WebUIInput(v, taskMap(k).unzip._2)
+      }.toList
 
+    }catch {
+      case t : Throwable => println(s"Failed to get metrics ${t.getMessage}")
+        List[WebUIInput]()
+    }
   }
-  def optimizeSettings(previousRuns : Metrics) = ???
 }
+

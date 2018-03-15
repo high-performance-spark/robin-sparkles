@@ -37,7 +37,8 @@ object WebUIInput{
   }
 }
 
-case class ComputePartitions()(implicit val sparkConf: SparkConf) {
+
+case class ComputePartitions(val sparkConf: SparkConf) {
   implicit val logger: Logger = LoggerFactory.getLogger(classOf[ComputePartitions])
   final val TASK_OVERHEAD_MILLI = 10
 
@@ -45,7 +46,8 @@ case class ComputePartitions()(implicit val sparkConf: SparkConf) {
     val concurrentTasks = possibleConcurrentTasks()
     previousRuns match {
       case Nil => concurrentTasks
-      case first :: second :: tail =>
+      case first :: Nil => (first.numPartitionsUsed + first.numExectutors)
+      case first :: second :: _ =>
         val inputTaskSize = second.totalInputSize
         val taskMemoryMb = availableTaskMemoryMB()
         val floor: Int = Math.max(Math.round(inputTaskSize/taskMemoryMb).toInt, concurrentTasks)
