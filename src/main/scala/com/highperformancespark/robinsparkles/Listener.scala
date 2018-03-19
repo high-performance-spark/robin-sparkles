@@ -25,17 +25,20 @@ class RobinTaskListener(sc: SparkContext, override val metricsFileName: String)
 class MetricsReader(conf: SparkConf, metricsRootDir: String) {
   val appName = conf.getOption("spark.app.name").getOrElse("please_set_app_name")
   //TODO: Should we just store with application ID
-  val STAGE_METRICS_DIR = "stage_metrics"
-  val TASK_METRICS_DIR = "task_metrics"
+  val STAGE_METRICS_SUBDIR = "stage_metrics"
+  val TASK_METRICS_SUBDIR = "task_metrics"
 
   val metricsDir = s"$metricsRootDir/${appName}"
 
+  val stageMetricsDir = s"$metricsDir/$STAGE_METRICS_SUBDIR"
+  val taskMetricsDir = s"$metricsDir/$TASK_METRICS_SUBDIR"
+
   def stageMetricsPath(n: Int): String = {
-    s"$metricsDir/$STAGE_METRICS_DIR/run=$n"
+    s"$metricsDir/run=$n"
   }
 
   def taskMetricsPath(n: Int): String = {
-    s"$metricsDir/$TASK_METRICS_DIR/run=$n"
+    s"$taskMetricsDir/run=$n"
   }
 
 //  def numPreviousRuns = {
@@ -73,13 +76,14 @@ class MetricsCollector(sc: SparkContext, metricsRootDir: String)
     extends MetricsReader(sc.getConf, metricsRootDir) {
 
   // Hack: we should use HDFS in the future, but requires an SC
-  metricsDir.toFile.createIfNotExists(true, true)
+  stageMetricsDir.toFile.createIfNotExists(true, true)
+  taskMetricsDir.toFile.createIfNotExists(true, true)
 
   def startSparkJobWithRecording(runNumber: Int) = {
     val myTaskListener = new RobinTaskListener(sc,
       taskMetricsPath(runNumber))
     val myStageListener = new RobinStageListener(sc,
-      taskMetricsPath(runNumber))
+      stageMetricsPath(runNumber))
     sc.addSparkListener(myTaskListener)
     sc.addSparkListener(myStageListener)
   }

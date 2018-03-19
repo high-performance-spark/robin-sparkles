@@ -77,6 +77,7 @@ case class ComputePartitions(val sparkConf: SparkConf) {
    * @return
    */
   def availableTaskMemoryMB(): Double = {
+    // Note: spark.executor.memory won't always be set TODO handle this
     val execMem = sparkConf.getSizeAsMb("spark.executor.memory")
     val memFraction = sparkConf.getDouble("spark.memory.fraction", 0.6)
     val storageFraction = sparkConf.getDouble("spark.memory.storageFraction", 0.5)
