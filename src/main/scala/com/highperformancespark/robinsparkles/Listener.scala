@@ -3,25 +3,39 @@ package com.highperformancespark.robinsparkles
 import java.io.FileInputStream
 import java.nio.file.Paths
 
+import better.files._
+import better.files.File._
 import ch.cern.sparkmeasure.StageVals
 import ch.cern.sparkmeasure.Utils.ObjectInputStreamWithCustomClassLoader
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
 
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
-class MetricsCollector(metricsDir: String) {
+class RobinStageListener(sc: SparkContext, override val metricsFileName: String)
+    extends ch.cern.sparkmeasure.FlightRecorderStageMetrics(sc.getConf) {
+}
+
+class RobinTaskListener(sc: SparkContext, override val metricsFileName: String)
+    extends ch.cern.sparkmeasure.FlightRecorderTaskMetrics(sc.getConf) {
+  // Hack: we should use HDFS in the future, but requires an SC
+}
+
+class MetricsReader(conf: SparkConf, metricsRootDir: String) {
+  val appName = conf.getOption("spark.app.name").getOrElse("please_set_app_name")
   //TODO: Should we just store with application ID
   val STAGE_METRICS_DIR = "stage_metrics"
   val TASK_METRICS_DIR = "task_metrics"
 
+  val metricsDir = s"$metricsRootDir/${appName}"
+
   def stageMetricsPath(n: Int): String = {
-    s"$metricsDir/$STAGE_METRICS_DIR/app_$n"
+    s"$metricsDir/$STAGE_METRICS_DIR/run=$n"
   }
 
   def taskMetricsPath(n: Int): String = {
-    s"$metricsDir/$TASK_METRICS_DIR/app_$n"
+    s"$metricsDir/$TASK_METRICS_DIR/run=$n"
   }
 
 //  def numPreviousRuns = {
@@ -31,18 +45,6 @@ class MetricsCollector(metricsDir: String) {
 //    val result = ois.readObject().asInstanceOf[ListBuffer[T]]
 //    result
 //  }
-
-  def startSparkJobWithRecording(sparkConf : SparkConf, runNumber : Int): SparkConf = {
-    sparkConf.set(
-      "spark.extraListeners", "ch.cern.sparkmeasure.FlightRecorderStageMetrics")
-    sparkConf.set("spark.extraListeners",
-      "ch.cern.sparkmeasure.FlightRecorderStageMetrics")
-
-    sparkConf.set("spark.executorEnv.stageMetricsFileName" ,
-      metricsDir)
-    sparkConf
-  }
-
   def readStageInfo(n : Int) = {
     ch.cern.sparkmeasure.Utils.readSerializedStageMetrics(stageMetricsPath(n))
   }
@@ -51,20 +53,35 @@ class MetricsCollector(metricsDir: String) {
     ch.cern.sparkmeasure.Utils.readSerializedTaskMetrics(taskMetricsPath(n))
   }
 
-  def getRunInfo(n : Int) : List[WebUIInput] = {
-    try{
+  def getRunInfo(n: Int): Option[List[WebUIInput]] = {
+    try {
       val stageInfo = readStageInfo(n)
       val taskInfo = readTaskInfo(n)
       val stageMap = stageInfo.map(s => (s.stageId, s)).toMap
       val taskMap = taskInfo.map(s => (s.stageId, s)).groupBy(_._1)
-      stageMap.map { case (k, v) =>
+      Some(stageMap.map { case (k, v) =>
         WebUIInput(v, taskMap(k).unzip._2)
-      }.toList
-
-    }catch {
-      case t : Throwable => println(s"Failed to get metrics ${t.getMessage}")
-        List[WebUIInput]()
+      }.toList)
+    } catch {
+      // Hack
+      case _ => None
     }
+  }
+}
+
+class MetricsCollector(sc: SparkContext, metricsRootDir: String)
+    extends MetricsReader(sc.getConf, metricsRootDir) {
+
+  // Hack: we should use HDFS in the future, but requires an SC
+  metricsDir.toFile.createIfNotExists(true, true)
+
+  def startSparkJobWithRecording(runNumber: Int) = {
+    val myTaskListener = new RobinTaskListener(sc,
+      taskMetricsPath(runNumber))
+    val myStageListener = new RobinStageListener(sc,
+      taskMetricsPath(runNumber))
+    sc.addSparkListener(myTaskListener)
+    sc.addSparkListener(myStageListener)
   }
 }
 

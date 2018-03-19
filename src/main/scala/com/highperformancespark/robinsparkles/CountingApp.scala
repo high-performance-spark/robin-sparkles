@@ -3,7 +3,6 @@ package com.highperformancespark.robinsparkles
 import java.nio.file.FileSystem
 
 import com.highperformancespark.robinsparkles.CountingLocalApp.conf
-import org.apache.hadoop.metrics2.MetricsCollector
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.util.Try
@@ -23,11 +22,12 @@ object CountingLocalApp extends App{
       , "tmp/output", "/tmp/metrics")
   val conf = new SparkConf()
     .setMaster("local")
-    .setAppName("my awesome app").set("spark.num.executors", "1")
+    .setAppName("my_awesome_app").set("spark.num.executors", "1")
 
- val newConf = Runner.getOptimizedConf(metricsDir, conf)
+  val (newConf: SparkConf, id: Int) = Runner.getOptimizedConf(metricsDir, conf)
+  val sc = SparkContext.getOrCreate(newConf)
 
-  Runner.run(newConf, inputFile, outputFile)
+  Runner.run(sc, id, metricsDir, inputFile, outputFile)
 }
 
 /**
@@ -37,29 +37,31 @@ object CountingApp extends App{
   val (inputFile, outputFile) = (args(0), args(1))
 
   // spark-submit command should supply all necessary config elements
-  Runner.run(new SparkConf(), inputFile, outputFile)
+  Runner.run(SparkContext.getOrCreate(), 0, "/tmp", inputFile, outputFile)
 }
 
 object Runner {
 
-  def getOptimizedConf(metricsDir : String, conf : SparkConf) : SparkConf = {
-    val metricsCollector = new MetricsCollector(metricsDir)
-    val firstRun = metricsCollector.getRunInfo(0)
-    val secondRun = metricsCollector.getRunInfo(1)
-    val prevRuns = firstRun ++ secondRun
-    val p = ComputePartitions.apply(conf).fromStageMetric(prevRuns)
+  def getOptimizedConf(metricsDir: String, conf: SparkConf):
+      (SparkConf, Int) = {
+    val metricsReader = new MetricsReader(conf, metricsDir)
+    // Load all of the previous runs until one isn't found
+    val prevRuns = Stream.from(0)
+      .map(id => metricsReader.getRunInfo(id))
+      .takeWhile(_.isDefined)
+      .map(_.get)
+    // Hack right now we only look at the previous run
+    val prevRunOption = prevRuns.lastOption
+    // Only compute the partitions if there is historical data
+    val pOption  = prevRunOption.map(prevRun => ComputePartitions.apply(conf).fromStageMetric(prevRun))
 
-    metricsCollector.startSparkJobWithRecording(
-      conf
-        .set("spark.default.parallelism", p.toString)
-        .set("spark.local.dir", metricsDir),
-       prevRuns.length)
+    pOption.foreach(p => (conf.set("spark.default.parallelism", p.toString)))
+    (conf, prevRuns.length)
   }
-  def run(conf: SparkConf, inputFile: String, outputFile: String): Unit = {
+  def run(sc: SparkContext, id: Int, metricsDir: String, inputFile: String, outputFile: String): Unit = {
+    val metricsCollector = new MetricsCollector(sc, metricsDir)
+    metricsCollector.startSparkJobWithRecording(id)
 
-    val sc = new SparkContext(conf)
-
-    println(" local dir is " + sc.getConf.get("spark.local.dir"))
 
     val rdd = sc.textFile(inputFile)
     val counts = WordCount.withStopWordsFiltered(rdd)

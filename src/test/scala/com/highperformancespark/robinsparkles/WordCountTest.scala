@@ -10,7 +10,7 @@ import org.scalatest.FunSuite
 
 class WordCountTest extends FunSuite with DataFrameSuiteBase {
   test("word count with Stop Words Removed"){
-   // val receiver = Receiver(spark)
+    // TODO: Add listener
 
     val linesRDD = sc.parallelize(Seq(
       "How happy was the panda? You ask.",
@@ -27,7 +27,5 @@ class WordCountTest extends FunSuite with DataFrameSuiteBase {
     assert(!wordCountsAsMap.contains("#!?ing"))
     assert(wordCountsAsMap.contains("ing"))
     assert(wordCountsAsMap.get("panda").get.equals(3))
-  //  val metricsDF = receiver.df()
-  //  assert(metricsDF.count() === 3)
   }
 }
