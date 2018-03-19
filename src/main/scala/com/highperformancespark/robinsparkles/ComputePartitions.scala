@@ -2,7 +2,10 @@ package com.highperformancespark.robinsparkles
 
 import ch.cern.sparkmeasure.{StageVals, TaskVals}
 import org.apache.spark.SparkConf
+import org.apache.spark.util.Utils
 import org.slf4j.{Logger, LoggerFactory}
+
+import scala.util.Try
 
 //These are placeholders for some kind of executor information or tasks class since those sparks objects are private
 case class Task(totalTime: Int) //TODO Replace this with the actual stuff or spark object
@@ -77,15 +80,25 @@ case class ComputePartitions(val sparkConf: SparkConf) {
    * @return
    */
   def availableTaskMemoryMB(): Double = {
-    // Note: spark.executor.memory won't always be set TODO handle this
-    val execMem = sparkConf.getSizeAsMb("spark.executor.memory")
     val memFraction = sparkConf.getDouble("spark.memory.fraction", 0.6)
     val storageFraction = sparkConf.getDouble("spark.memory.storageFraction", 0.5)
     val nonStorage = 1-storageFraction
     val cores = sparkConf.getInt("spark.executor.cores", 1) //We should probably fail here?
-    Math.ceil(execMem * memFraction * nonStorage / cores)
+    Math.ceil(executorMemory * memFraction * nonStorage / cores)
   }
 
+  lazy val executorMemory : Long = {
+     Try(sparkConf.getSizeAsMb("spark.executor.memory"))
+       .getOrElse(
+         Option(System.getenv("SPARK_EXECUTOR_MEMORY"))
+           .map(_.toLong)
+           .getOrElse(
+             Option(System.getenv("SPARK_MEM"))
+               .map(_.toLong)
+               .getOrElse(1024)
+           )
+       )
+  }
 
   def executorIdleTime(webUIInput: WebUIInput): Int = {
     val executorStageTime = webUIInput.stageTime * webUIInput.numExectutors
