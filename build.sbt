@@ -10,8 +10,8 @@ lazy val root = (project in file(".")).
     name := "robinSparkles",
     version := "0.0.1",
 
-    sparkVersion := "2.2.1",
-    sparkComponents := Seq(),
+    sparkVersion := "2.3.0",
+    sparkComponents := Seq("sql", "hive"),
 
     javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
     javaOptions ++= Seq("-Xms512M", "-Xmx2048M", "-XX:MaxPermSize=2048M", "-XX:+CMSClassUnloadingEnabled"),
@@ -23,7 +23,6 @@ lazy val root = (project in file(".")).
 
     libraryDependencies ++= Seq(
       "org.apache.spark" %% "spark-streaming" % "2.2.1" % "provided",
-      "org.apache.spark" %% "spark-sql" % "2.2.0" % "provided",
       "ch.cern.sparkmeasure" %% "spark-measure" % "0.11",
 
       "org.scalatest" %% "scalatest" % "3.0.1" % "test",

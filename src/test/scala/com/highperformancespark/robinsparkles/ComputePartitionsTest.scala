@@ -27,7 +27,7 @@ class ComputePartitionsTest extends FunSuite {
       "spark.executor.memory" -> s"${Math.round(1024*2/(0.6*0.5))}m"
     ))
 
-    val partitions = ComputePartitions().fromStageMetric(List(first, second))
+    val partitions = ComputePartitions(sparkConf).fromStageMetric(List(first, second))
     assert(partitions > second.numPartitionsUsed)
   }
 

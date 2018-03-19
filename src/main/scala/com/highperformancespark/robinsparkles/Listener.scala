@@ -5,7 +5,6 @@ import java.nio.file.Paths
 
 import ch.cern.sparkmeasure.StageVals
 import ch.cern.sparkmeasure.Utils.ObjectInputStreamWithCustomClassLoader
-import com.sun.javafx.font.Metrics
 import org.apache.spark.SparkConf
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
 
@@ -16,10 +15,12 @@ class MetricsCollector(metricsDir: String) {
   //TODO: Should we just store with application ID
   val STAGE_METRICS_DIR = "stage_metrics"
   val TASK_METRICS_DIR = "task_metrics"
-  def stageMetricsPath(n : Int) : String = {
+
+  def stageMetricsPath(n: Int): String = {
     s"$metricsDir/$STAGE_METRICS_DIR/app_$n"
   }
-  def taskMetricsPath(n : Int): String = {
+
+  def taskMetricsPath(n: Int): String = {
     s"$metricsDir/$TASK_METRICS_DIR/app_$n"
   }
 
