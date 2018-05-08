@@ -15,24 +15,26 @@ case class Task(totalTime: Int) //TODO Replace this with the actual stuff or spa
  * flexible about which of those metrics we collect
  */
 case class WebUIInput(
+  executorCPUTime: Int,
   stageTime: Int,
   totalInputSize : Double,
   numExectutors : Int,
   private val taskMetrics: List[Task]){
 
-  val numPartitionsUsed: Int = taskMetrics.size //TODO: Subtract retries
 
   val totalTaskTime: Int = taskMetrics.foldRight(0)((t, b) => b + t.totalTime)
 
-  val totalTasksRun: Int = taskMetrics.length
+  val numPartitionsUsed: Int = taskMetrics.length
 
 }
 object WebUIInput{
   def apply(s : StageVals, tList : Seq[TaskVals]) : WebUIInput = {
 
     val numExecutors = tList.map(_.executorId).distinct.size
+
     val inputSizeMb = s.bytesRead/(1024.0*1024.0)
     WebUIInput(
+      s.executorCpuTime.toInt, //This is the amount of time that the executor was actually doing the computation for this stage
       s.stageDuration.toInt,
       inputSizeMb,
       numExecutors,
@@ -45,11 +47,17 @@ case class ComputePartitions(val sparkConf: SparkConf) {
   implicit val logger: Logger = LoggerFactory.getLogger(classOf[ComputePartitions])
   final val TASK_OVERHEAD_MILLI = 10
 
+  /**
+   * Increases the number of partitions until the cluster if fully utalized according to stage duration OR the performance
+   * stops improving
+   * @param previousRuns
+   * @return
+   */
   def fromStageMetric(previousRuns: List[WebUIInput]): Int = {
     val concurrentTasks = possibleConcurrentTasks()
     previousRuns match {
       case Nil => concurrentTasks
-      case first :: Nil => (first.numPartitionsUsed + first.numExectutors)
+      case first :: Nil => (first.numPartitionsUsed + first.numPartitionsUsed)
       case first :: second :: _ =>
         val inputTaskSize = second.totalInputSize
         val taskMemoryMb = availableTaskMemoryMB()
@@ -64,7 +72,28 @@ case class ComputePartitions(val sparkConf: SparkConf) {
         }else{
           //Wow that is incredible!
           logger.info("Wow!Your tasks are distributed amongst the executors with maximum efficiency. Don't change a thing")
-          Math.max(floor, second.totalTasksRun)
+          Math.max(floor, second.numPartitionsUsed)
+        }
+    }
+  }
+
+
+  def fromStageMetricSharedCluster(previousRuns: List[WebUIInput]): Int = {
+    val concurrentTasks = possibleConcurrentTasks()
+    previousRuns match {
+      case Nil => concurrentTasks
+      case first :: Nil => (first.numPartitionsUsed + first.numExectutors)
+      case first :: second :: _ =>
+        val inputTaskSize = second.totalInputSize
+        val taskMemoryMb = availableTaskMemoryMB()
+        val floor: Int = Math.max(Math.round(inputTaskSize/taskMemoryMb).toInt, concurrentTasks)
+
+        if(morePartitionsIsBetter(first,second)){
+          //Increase the number of partitions
+           Seq(floor, first.numPartitionsUsed, second.numPartitionsUsed).max + second.numExectutors
+        }else{
+          //If we overshot the number of partitions, use previous run if it was better
+          List(first,second).sortBy(_.executorCPUTime).head.numPartitionsUsed
         }
     }
   }
@@ -100,17 +129,33 @@ case class ComputePartitions(val sparkConf: SparkConf) {
        )
   }
 
-  def executorIdleTime(webUIInput: WebUIInput): Int = {
-    val executorStageTime = webUIInput.stageTime * webUIInput.numExectutors
-    executorStageTime - webUIInput.totalTaskTime
-  }
+
 
   /**
    * Compare to stages, return true if the one which uses more partitions had a shorter stage time
    */
   def morePartitionsIsBetter(first: WebUIInput, second : WebUIInput) : Boolean = {
     val morePartitions :: lessPartitions :: _ = List(first,second).sortBy(_.numPartitionsUsed)
-    morePartitions.stageTime > lessPartitions.stageTime
+    morePartitions.executorCPUTime > lessPartitions.executorCPUTime
+  }
+
+  def bestPartitionsSoFar(first: WebUIInput, second : WebUIInput) : Int = {
+    List(first,second).sortBy(_.executorCPUTime).head.numPartitionsUsed
+  }
+
+
+  /**
+   * Computes the amount of executor hours computed in the stage (stage time * num executors)  - the total time it took
+   * to run all the tasks
+   * WARNING: this metric will verry based on network/ connectivity issues, and if dynamic allocation is used or the
+   * number of executors is not fixed between runs OR if there is traffic on the cluster
+   * @param webUIInput
+   * @return
+   */
+  def executorIdleTime(webUIInput: WebUIInput): Int = {
+
+    val executorStageTime = webUIInput.stageTime * webUIInput.numExectutors
+    executorStageTime - webUIInput.totalTaskTime
   }
 
 }
