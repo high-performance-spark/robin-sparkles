@@ -9,17 +9,20 @@ class ComputePartitionsTest extends FunSuite {
 
   test("If partitions increased and stage  time decrease, then we should increase partitions "){
 
-    val first = WebUIInput(
+    val first = StageInfo(
       executorCPUTime = 105,
       stageTime = 105,
       totalInputSize = 1024 * 1024 * 1024 * 2 * 3,
       numExectutors = 3,
+      shuffleSize = ShuffleSize(20, 30),
       taskMetrics = List.fill(19)(Task(11)))
 
-    val second = WebUIInput(
-      executorCPUTime = 90,stageTime = 95,
+    val second = StageInfo(
+      executorCPUTime = 90,
+      stageTime = 95,
       totalInputSize = 1024 * 1024 * 1024 * 3,
       numExectutors = 3,
+      shuffleSize = ShuffleSize(20, 30),
       taskMetrics = List.fill(20)(Task(10)))
 
     implicit val sparkConf =  new SparkConf().setAll(Map(
