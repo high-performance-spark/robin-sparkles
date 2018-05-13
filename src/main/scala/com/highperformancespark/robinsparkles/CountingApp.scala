@@ -53,7 +53,7 @@ object Runner {
     // Hack right now we only look at the previous run
     val prevRunOption = prevRuns.lastOption
     // Only compute the partitions if there is historical data
-    val pOption  = prevRunOption.map(prevRun => ComputePartitions.apply(conf).fromStageMetric(prevRun))
+    val pOption  = prevRunOption.map(prevRun => ComputePartitions.apply(conf).fromStageMetricSharedCluster(prevRun))
 
     pOption.foreach(p => (conf.set("spark.default.parallelism", p.toString)))
     (conf, prevRuns.length)
