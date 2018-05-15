@@ -13,7 +13,7 @@ class ComputePartitionsTest extends FunSuite {
       executorCPUTime = 105,
       stageTime = 105,
       totalInputSize = 1024 * 1024 * 1024 * 2 * 3,
-      numExectutors = 3,
+      numExecutors = 3,
       shuffleSize = ShuffleSize(20, 30),
       taskMetrics = List.fill(19)(Task(11)))
 
@@ -21,7 +21,7 @@ class ComputePartitionsTest extends FunSuite {
       executorCPUTime = 90,
       stageTime = 95,
       totalInputSize = 1024 * 1024 * 1024 * 3,
-      numExectutors = 3,
+      numExecutors = 3,
       shuffleSize = ShuffleSize(20, 30),
       taskMetrics = List.fill(20)(Task(10)))
 

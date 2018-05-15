@@ -19,7 +19,7 @@ case class StageInfo(
   executorCPUTime: Int,
   stageTime: Int,
   totalInputSize : Double,
-  numExectutors : Int,
+  numExecutors : Int,
   shuffleSize: ShuffleSize,
   private val taskMetrics: List[Task]){
 
@@ -63,16 +63,17 @@ case class ComputePartitions(val sparkConf: SparkConf) {
   final val TASK_OVERHEAD_MILLI = 10
 
   /**
-   * Increases the number of partitions until the cluster if fully utalized according to stage duration OR the performance
-   * stops improving
-   * @param previousRuns
+   * Increases the number of partitions until the cluster if fully utilized according to stage duration
+   * OR the performance stops improving
+   * @param previousRuns - List of stages from previous runs that we want to optimize.
+   *                     We are assuming that each element in the list represents the same stage but for different runs
    * @return
    */
   def fromStageMetric(previousRuns: List[StageInfo]): Int = {
     val concurrentTasks = possibleConcurrentTasks()
     previousRuns match {
       case Nil => concurrentTasks
-      case first :: Nil => (first.numPartitionsUsed + first.numExectutors)
+      case first :: Nil => (first.numPartitionsUsed + first.numExecutors)
       case first :: second :: _ =>
         val inputTaskSize = second.totalInputSize
         val taskMemoryMb = availableTaskMemoryMB()
@@ -80,7 +81,7 @@ case class ComputePartitions(val sparkConf: SparkConf) {
         val execTime = executorIdleTime(second)
         if(execTime > 0){
           if(morePartitionsIsBetter(first,second)){
-            Seq(floor, first.numPartitionsUsed, second.numPartitionsUsed).max + second.numExectutors
+            Seq(floor, first.numPartitionsUsed, second.numPartitionsUsed).max + second.numExecutors
           }else{
             second.numPartitionsUsed
           }
@@ -101,7 +102,7 @@ case class ComputePartitions(val sparkConf: SparkConf) {
           .getOption("spark.default.parallelism")
           .map(_.toInt)
           .getOrElse(concurrentTasks)
-      case first :: Nil => first.numPartitionsUsed + math.max(first.numExectutors,1)
+      case first :: Nil => first.numPartitionsUsed + math.max(first.numExecutors,1)
       case  _   =>
         val first = previousRuns(previousRuns.length - 2)
         val second = previousRuns(previousRuns.length - 1)
@@ -112,8 +113,15 @@ case class ComputePartitions(val sparkConf: SparkConf) {
         previousRuns.foreach(metrics => logger.info(s"${metrics.numPartitionsUsed} -> ${metrics.executorCPUTime}ms"))
 
         if(morePartitionsIsBetter(first,second)){
-          //Increase the number of partitions
-           Seq(floor, first.numPartitionsUsed, second.numPartitionsUsed).max + second.numExectutors
+          if(first.numPartitionsUsed != second.numPartitionsUsed){
+            //Increase the number of partitions
+            Seq(floor, first.numPartitionsUsed, second.numPartitionsUsed).max + second.numExecutors
+          }else{
+            //TODO: Is this the desired behavior?
+           logger.warn("The number of partitions for the last two runs has been the same. We assume you have reached" +
+             "the optimal number")
+            second.numPartitionsUsed
+          }
         }else{
           //If we overshot the number of partitions, use whichever run had the best executor cpu time
           logger.info("Increasing the number of partitions is not improving performance ")
@@ -124,6 +132,7 @@ case class ComputePartitions(val sparkConf: SparkConf) {
 
   //TODO: What is the best way to calculate this if using dynamic allocation
   def possibleConcurrentTasks(): Int = {
+    val executors = sparkConf.getOption("spark.num.executors").map(_)
     sparkConf.getInt("spark.executor.cores", 1) * sparkConf.getInt("spark.num.executors", 1)
   }
 
@@ -160,14 +169,8 @@ case class ComputePartitions(val sparkConf: SparkConf) {
    * TODO: we don't ever try to increase partitions
    */
   def morePartitionsIsBetter(first: StageInfo, second : StageInfo) : Boolean = {
-
     val lessPartitions :: morePartitions :: _ = List(first,second).sortBy(_.numPartitionsUsed)
-    (morePartitions.executorCPUTime < lessPartitions.executorCPUTime) &&
-      (morePartitions.numPartitionsUsed != lessPartitions.numPartitionsUsed)
-  }
-
-  def bestPartitionsSoFar(first: StageInfo, second : StageInfo) : Int = {
-    List(first,second).sortBy(_.executorCPUTime).head.numPartitionsUsed
+    (morePartitions.executorCPUTime < lessPartitions.executorCPUTime)
   }
 
 
@@ -176,12 +179,10 @@ case class ComputePartitions(val sparkConf: SparkConf) {
    * to run all the tasks
    * WARNING: this metric will verry based on network/ connectivity issues, and if dynamic allocation is used or the
    * number of executors is not fixed between runs OR if there is traffic on the cluster
-   * @param webUIInput
-   * @return
    */
   def executorIdleTime(webUIInput: StageInfo): Int = {
 
-    val executorStageTime = webUIInput.stageTime * webUIInput.numExectutors
+    val executorStageTime = webUIInput.stageTime * webUIInput.numExecutors
     executorStageTime - webUIInput.totalTaskTime
   }
 
