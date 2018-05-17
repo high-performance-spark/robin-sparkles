@@ -95,6 +95,7 @@ case class ComputePartitions(val sparkConf: SparkConf) {
 
   def fromStageMetricSharedCluster(previousRuns: List[StageInfo]): Int = {
     val concurrentTasks = possibleConcurrentTasks()
+
     previousRuns match {
       case Nil =>
         //If this is the first run and parallelism is not provided, use the number of concurrent tasks
@@ -102,13 +103,15 @@ case class ComputePartitions(val sparkConf: SparkConf) {
           .getOption("spark.default.parallelism")
           .map(_.toInt)
           .getOrElse(concurrentTasks)
-      case first :: Nil => first.numPartitionsUsed + math.max(first.numExecutors,1)
+      case first :: Nil =>
+        val fromInputSize = determinePartitionsFromInputDataSize(first.totalInputSize)
+        Math.max(first.numPartitionsUsed + math.max(first.numExecutors,1), fromInputSize)
       case  _   =>
         val first = previousRuns(previousRuns.length - 2)
         val second = previousRuns(previousRuns.length - 1)
-        val inputTaskSize = second.totalInputSize
-        val taskMemoryMb = availableTaskMemoryMB()
-        val floor: Int = Math.max(Math.round(inputTaskSize/taskMemoryMb).toInt, concurrentTasks)
+
+        val fromInputData = determinePartitionsFromInputDataSize(second.totalInputSize)
+        val floor: Int = Math.max(fromInputData, concurrentTasks)
         logger.info("Partitions --> executor CPU time")
         previousRuns.foreach(metrics => logger.info(s"${metrics.numPartitionsUsed} -> ${metrics.executorCPUTime}ms"))
 
@@ -128,6 +131,10 @@ case class ComputePartitions(val sparkConf: SparkConf) {
           previousRuns.sortBy(_.executorCPUTime).head.numPartitionsUsed
         }
     }
+  }
+
+  def determinePartitionsFromInputDataSize(inputDataSize: Double) : Int = {
+    Math.round(inputDataSize/availableTaskMemoryMB()).toInt
   }
 
   //TODO: What is the best way to calculate this if using dynamic allocation
