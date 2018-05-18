@@ -67,7 +67,10 @@ class MetricsReader(conf: SparkConf, metricsRootDir: String) {
       }.toList)
     } catch {
       // Hack
-      case _ => None
+      case e : Throwable =>
+        println(s"Failed to read stage $n")
+        println(e.getMessage)
+        None
     }
   }
 }

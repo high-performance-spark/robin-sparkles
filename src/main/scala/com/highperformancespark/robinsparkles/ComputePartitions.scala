@@ -51,8 +51,12 @@ object StageInfo{
 
   def stagesWithMostExpensiveShuffle(previousRuns : Stream[List[StageInfo]]): List[StageInfo]= {
    previousRuns.headOption.map(_.zipWithIndex.maxBy(_._1.shuffleSize)) match {
-     case Some((sageInfo, index)) => previousRuns.flatMap(w => List(w(index))).toList
-     case None => List[StageInfo]()
+     case Some((sageInfo, index)) => previousRuns.flatMap(
+       w => Try(List(w.apply(index)))
+         .getOrElse{
+           println(s"Failed to find index for stage ${w}")
+           List[StageInfo]()
+         }).toList
    }
   }
 }
@@ -139,7 +143,6 @@ case class ComputePartitions(val sparkConf: SparkConf) {
 
   //TODO: What is the best way to calculate this if using dynamic allocation
   def possibleConcurrentTasks(): Int = {
-    val executors = sparkConf.getOption("spark.num.executors").map(_)
     sparkConf.getInt("spark.executor.cores", 1) * sparkConf.getInt("spark.num.executors", 1)
   }
 

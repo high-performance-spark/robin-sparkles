@@ -66,9 +66,8 @@ object Runner {
       .map(id => metricsReader.getRunInfo(id))
       .takeWhile(_.isDefined)
       .map(_.get)
-    // Hack right now we only look at the previous run
-    val prevRunOption = prevRuns.lastOption
 
+    prevRuns.zipWithIndex.foreach(x=> println(x._2 + x._1.mkString(", ")))
     val partitions = ComputePartitions(conf)
       .fromStageMetricSharedCluster(
       StageInfo.stagesWithMostExpensiveShuffle(prevRuns)
