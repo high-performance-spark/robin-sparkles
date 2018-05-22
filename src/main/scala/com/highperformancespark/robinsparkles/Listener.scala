@@ -56,18 +56,21 @@ class MetricsReader(conf: SparkConf, metricsRootDir: String) {
     ch.cern.sparkmeasure.Utils.readSerializedTaskMetrics(taskMetricsPath(n))
   }
 
-  def getRunInfo(n: Int): Option[List[WebUIInput]] = {
+  def getRunInfo(n: Int): Option[List[StageInfo]] = {
     try {
       val stageInfo = readStageInfo(n)
       val taskInfo = readTaskInfo(n)
       val stageMap = stageInfo.map(s => (s.stageId, s)).toMap
       val taskMap = taskInfo.map(s => (s.stageId, s)).groupBy(_._1)
       Some(stageMap.map { case (k, v) =>
-        WebUIInput(v, taskMap(k).unzip._2)
+        StageInfo(v, taskMap(k).unzip._2)
       }.toList)
     } catch {
       // Hack
-      case _ => None
+      case e : Throwable =>
+        println(s"Failed to read stage $n")
+        println(e.getMessage)
+        None
     }
   }
 }
